@@ -94,12 +94,10 @@ app.get(
 
       const snapshot = await incidentsRef.get();
       if (snapshot.empty) {
-        // Send back the full, empty JSON structure
+        // 1. UPDATE the empty response
         return res.json({
           summary: "No incidents to summarize yet.",
-          patterns: [],
-          suggestions: [],
-          performance_rubric: [], // 1. Add the new empty field
+          scores: {}, // Send an empty object
         });
       }
 
@@ -113,22 +111,10 @@ app.get(
       const jsonSchema = {
         type: SchemaType.OBJECT,
         properties: {
-          holistic_summary: { type: SchemaType.STRING }, // <-- Use new name
-          performance_scores: {
-            // <-- Use new name
-            type: SchemaType.ARRAY,
-            items: {
-              type: SchemaType.OBJECT,
-              properties: {
-                criterion: { type: SchemaType.STRING },
-                score: { type: SchemaType.NUMBER },
-                justification: { type: SchemaType.STRING },
-              },
-              required: ["criterion", "score", "justification"],
-            },
-          },
+          summary: { type: SchemaType.STRING }, // <-- Use 'summary'
+          scores: { type: SchemaType.OBJECT }, // <-- Use 'scores' (and type OBJECT)
         },
-        required: ["holistic_summary", "performance_scores"],
+        required: ["summary", "scores"],
       };
 
       // 4. DEFINE THE NEW, STRICTER PROMPT
@@ -138,24 +124,24 @@ Analyze ALL incidents AS A WHOLE. Do NOT summarize each incident individually.
 
 Respond ONLY with a JSON object.
 
-In addition to the summary, you MUST provide a detailed performance score based on the following 7 criteria.
+You MUST provide a detailed performance score for EACH of the 7 criteria.
 Use a 1-5 scale:
-1 = Poor
-2 = Needs Improvement
-3 = Neutral / Insufficient Information
-4 = Good
-5 = Excellent
+1 = Poor, 2 = Needs Improvement, 3 = Neutral / Insufficient Information, 4 = Good, 5 = Excellent
+**CRITICAL RULE:** If there is NO INFORMATION, score it as 3 (Neutral) and justify with 'Insufficient information.'
 
-**CRITICAL RULE:** If there is NO INFORMATION in the incidents to score a criterion, you MUST give it a score of 3 and set the justification to 'Insufficient information.' Do not make assumptions.
-
-Here are the 7 criteria to score:
-1.  **Suggests New Ideas:** Proactively suggests improvements.
-2.  **Collaboration:** Cooperates with teammates.
-3.  **Responsiveness:** Responds to communication promptly.
-4.  **Adaptability:** Adapts smoothly to changes and new policies.
-5.  **Feedback:** Is open to feedback and learning.
-6.  **Attendance:** Punctuality and low rate of unexplained absences.
-7.  **Professionalism:** Maintains professional conduct (e.g., with customers).
+Your response MUST match this JSON schema:
+{
+  "summary": "Your 2-3 sentence summary here.",
+  "scores": {
+    "Suggests New Ideas": { "score": 1-5, "justification": "Your justification." },
+    "Collaboration": { "score": 1-5, "justification": "Your justification." },
+    "Responsiveness": { "score": 1-5, "justification": "Your justification." },
+    "Adaptability": { "score": 1-5, "justification": "Your justification." },
+    "Feedback": { "score": 1-5, "justification": "Your justification." },
+    "Attendance": { "score": 1-5, "justification": "Your justification." },
+    "Professionalism": { "score": 1-5, "justification": "Your justification." }
+  }
+}
 
 Here are the incidents:
 ${incidentTexts.join("\n")}
