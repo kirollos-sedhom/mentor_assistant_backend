@@ -99,6 +99,7 @@ app.get(
           summary: "No incidents to summarize yet.",
           patterns: [],
           suggestions: [],
+          performance_rubric: [], // 1. Add the new empty field
         });
       }
 
@@ -108,38 +109,59 @@ app.get(
         return `${date}: ${data.description}`;
       });
 
-      // 1. Define the Schema using SchemaType
+      // 2. DEFINE THE NEW, STRICTER JSON SCHEMA
       const jsonSchema = {
         type: SchemaType.OBJECT,
         properties: {
-          summary: { type: SchemaType.STRING },
-          patterns: {
+          holistic_summary: { type: SchemaType.STRING }, // <-- Use new name
+          performance_scores: {
+            // <-- Use new name
             type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING },
-          },
-          suggestions: {
-            type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING },
+            items: {
+              type: SchemaType.OBJECT,
+              properties: {
+                criterion: { type: SchemaType.STRING },
+                score: { type: SchemaType.NUMBER },
+                justification: { type: SchemaType.STRING },
+              },
+              required: ["criterion", "score", "justification"],
+            },
           },
         },
-        required: ["summary", "patterns", "suggestions"],
+        required: ["holistic_summary", "performance_scores"],
       };
 
-      // 2. Define the strict prompt
+      // 4. DEFINE THE NEW, STRICTER PROMPT
       const prompt = `
 You are an educational performance assistant. Your task is to analyze a list of incidents for a tutor and provide a holistic performance summary.
-Analyze ALL incidents AS A WHOLE. You MUST NOT summarize each incident individually.
-Respond ONLY with a JSON object matching this schema:
-{
-  "summary": "A 2-3 sentence overall summary of performance.",
-  "patterns": ["A list of key behavioral patterns (strengths or weaknesses)."],
-  "suggestions": ["A list of actionable suggestions for improvement (if any)."]
-}
+Analyze ALL incidents AS A WHOLE. Do NOT summarize each incident individually.
+
+Respond ONLY with a JSON object.
+
+In addition to the summary, you MUST provide a detailed performance score based on the following 7 criteria.
+Use a 1-5 scale:
+1 = Poor
+2 = Needs Improvement
+3 = Neutral / Insufficient Information
+4 = Good
+5 = Excellent
+
+**CRITICAL RULE:** If there is NO INFORMATION in the incidents to score a criterion, you MUST give it a score of 3 and set the justification to 'Insufficient information.' Do not make assumptions.
+
+Here are the 7 criteria to score:
+1.  **Suggests New Ideas:** Proactively suggests improvements.
+2.  **Collaboration:** Cooperates with teammates.
+3.  **Responsiveness:** Responds to communication promptly.
+4.  **Adaptability:** Adapts smoothly to changes and new policies.
+5.  **Feedback:** Is open to feedback and learning.
+6.  **Attendance:** Punctuality and low rate of unexplained absences.
+7.  **Professionalism:** Maintains professional conduct (e.g., with customers).
+
 Here are the incidents:
 ${incidentTexts.join("\n")}
 `;
 
-      // 3. Create the request object (no 'GenerateContentRequest' type)
+      // 5. Create the request object
       const genAIRequest = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
@@ -148,7 +170,7 @@ ${incidentTexts.join("\n")}
         },
       };
 
-      // 4. Call the AI
+      // 6. Call the AI
       const result = await ai.models.generateContent({
         model: "gemini-2.5-flash", // Use a stable model
         ...genAIRequest,
@@ -156,7 +178,7 @@ ${incidentTexts.join("\n")}
 
       console.log("finding summary:...");
 
-      // 5. Safely get and parse the text
+      // 7. Safely get and parse the text
       const jsonString = result.text;
       if (!jsonString) {
         throw new Error("No text response from AI.");
@@ -174,6 +196,7 @@ ${incidentTexts.join("\n")}
 
       // Now, parse the *clean* string
       const summaryJson = JSON.parse(extractedJson);
+
       console.log(summaryJson);
       res.json(summaryJson); // Send the full object to the frontend
     } catch (error) {
